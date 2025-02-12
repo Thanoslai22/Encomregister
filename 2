@@ -1,0 +1,62 @@
+// Backend: Node.js + Express + SQLite
+// Frontend: React + TailwindCSS
+
+const express = require('express');
+const cors = require('cors');
+const nodemailer = require('nodemailer');
+const sqlite3 = require('sqlite3').verbose();
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const { v4: uuidv4 } = require('uuid');
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+const db = new sqlite3.Database('./requests.db', (err) => {
+    if (err) console.error(err.message);
+    console.log('Connected to SQLite database.');
+});
+
+db.run(CREATE TABLE IF NOT EXISTS requests (
+    id TEXT PRIMARY KEY,
+    name TEXT,
+    vat TEXT,
+    provider TEXT,
+    request_date TEXT,
+    email TEXT,
+    seller TEXT,
+    comments TEXT
+));
+
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user: 'your-email@gmail.com', pass: 'your-password' }
+});
+
+app.post('/submit', (req, res) => {
+    const { name, vat, provider, email, seller, comments } = req.body;
+    const id = uuidv4();
+    const request_date = new Date().toISOString();
+    
+    db.run(INSERT INTO requests (id, name, vat, provider, request_date, email, seller, comments) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?),
+        [id, name, vat, provider, request_date, email, seller, comments],
+        (err) => {
+            if (err) return res.status(500).json({ error: err.message });
+            
+            const mailOptions = {
+                from: 'your-email@gmail.com',
+                to: 'revma@encomsol.com',
+                subject: 'Νέα Αίτηση Ρεύματος',
+                text: Αίτηση από ${name} (ΑΦΜ: ${vat}) προς ${provider}. Πωλητής: ${seller}. Σχόλια: ${comments}
+            };
+            transporter.sendMail(mailOptions, (error) => {
+                if (error) return res.status(500).json({ error: error.message });
+                res.status(200).json({ message: 'Αίτηση καταχωρήθηκε επιτυχώς!' });
+            });
+        }
+    );
+});
+
+app.listen(5000, () => console.log('Server running on port 5000'));
